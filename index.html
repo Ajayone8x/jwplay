@@ -88,6 +88,14 @@
             border-radius: 14px;
             overflow: hidden;
             border: 1px solid var(--panel-border);
+            position: relative;
+        }
+        #jw-player {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         .grid-panels { display: grid; gap: 1rem; grid-template-columns: 1fr; }
         @media (min-width: 900px) { .grid-panels { grid-template-columns: 1fr 1fr; } }
@@ -289,7 +297,7 @@
                 streamType = 'hls';
             }
 
-            // Base player configuration
+            // Optimized player configuration for smooth playback
             const playerConfig = {
                 playlist: [{
                     file: streamUrl,
@@ -306,7 +314,23 @@
                 aspectratio: '16:9',
                 skin: {
                     name: 'seven'
-                }
+                },
+                // Optimized buffering settings
+                liveSyncDuration: 30,
+                liveTimeout: 60,
+                // Adaptive bitrate settings
+                qualityLabels: {
+                    '360': 'SD',
+                    '480': 'SD',
+                    '720': 'HD',
+                    '1080': 'Full HD'
+                },
+                // Performance optimizations
+                renderCaptionsNatively: false,
+                nextUpDisplay: false,
+                // Reduce initial buffering
+                bandwidthEstimate: 2000000,
+                defaultBandwidth: 1500000
             };
 
             // Add DRM configuration if keys are provided
@@ -325,6 +349,13 @@
             // Event listeners
             player.on('ready', () => {
                 console.log('JW Player is ready');
+                // Force initial quality to prevent buffering
+                const levels = player.getQualityLevels();
+                if (levels && levels.length > 0) {
+                    // Start with a mid-quality level for faster initial load
+                    const midQuality = Math.floor(levels.length / 2);
+                    player.setCurrentQuality(midQuality);
+                }
             });
 
             player.on('play', () => {
@@ -339,13 +370,31 @@
                 console.error('JW Player setup error:', e);
             });
 
-            // Handle buffering events
+            // Handle buffering events with quality adjustment
+            let bufferCount = 0;
             player.on('buffer', () => {
                 console.log('Buffering...');
+                bufferCount++;
+                // If buffering happens frequently, reduce quality
+                if (bufferCount > 3) {
+                    const currentQuality = player.getCurrentQuality();
+                    if (currentQuality > 0) {
+                        player.setCurrentQuality(currentQuality - 1);
+                        console.log('Reduced quality to prevent buffering');
+                        bufferCount = 0;
+                    }
+                }
             });
 
             player.on('bufferFull', () => {
                 console.log('Buffer full');
+            });
+
+            // Reset buffer count on successful playback
+            player.on('time', () => {
+                if (bufferCount > 0) {
+                    bufferCount = Math.max(0, bufferCount - 0.1);
+                }
             });
         }
         
